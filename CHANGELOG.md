@@ -49,6 +49,8 @@
 * New APIs for processing attributes: `ep_etherpad-lite/static/js/attributes`
   (low-level API) and `ep_etherpad-lite/static/js/AttributeMap` (high-level
   API).
+* The `handleClientMessage_${name}` client-side hooks are now passed the raw
+  message object in the new `msg` context property.
 * The `import` server-side hook has a new `ImportError` context property.
 * The `handleMessageSecurity` and `handleMessage` server-side hooks have a new
   `sessionInfo` context property that includes the user's author ID, the pad ID,
