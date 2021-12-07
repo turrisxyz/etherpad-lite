@@ -1042,7 +1042,7 @@ exports.userLeave = async (hookName, {author, padId}) => {
 
 ## `chatNewMessage`
 
-Called from: `src/node/handler/PadMessageHandler.js`
+Called from: `src/node/chat.js`
 
 Called when a user (or plugin) generates a new chat message, just before it is
 saved to the pad and relayed to all connected users.
