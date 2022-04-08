@@ -103,6 +103,7 @@
 * The `sendChatMessageToPadClients()` function in
   `src/node/handler/PadMessageHandler.js` is deprecated (no replacement
   planned).
+* The `chat` client-side global variable is deprecated (no replacement planned).
 
 # 1.8.17
 
