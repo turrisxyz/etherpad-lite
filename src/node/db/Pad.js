@@ -407,7 +407,6 @@ Pad.prototype.copy = async function (destinationID, force) {
   await Promise.all((function* () {
     yield copyRecord('');
     for (let i = 0; i <= this.head; ++i) yield copyRecord(`:revs:${i}`);
-    for (let i = 0; i <= this.chatHead; ++i) yield copyRecord(`:chat:${i}`);
     yield this.copyAuthorInfoToDestinationPad(destinationID);
     if (destGroupID) yield db.setSub(`group:${destGroupID}`, ['pads', destinationID], 1);
   }).call(this));

@@ -157,6 +157,16 @@ exports.padCheck = async (hookName, {pad}) => {
   }
 };
 
+exports.padCopy = async (hookName, {srcPad, dstPad}) => {
+  const copyRecord = async (keySuffix) => {
+    const val = await srcPad.db.get(`pad:${srcPad.id}${keySuffix}`);
+    await dstPad.db.set(`pad:${dstPad.id}${keySuffix}`, val);
+  };
+  await Promise.all((function* () {
+    for (let i = 0; i <= srcPad.chatHead; ++i) yield copyRecord(`:chat:${i}`);
+  })());
+};
+
 exports.padLoad = async (hookName, {pad}) => {
   if (!('chatHead' in pad)) pad.chatHead = -1;
 };
