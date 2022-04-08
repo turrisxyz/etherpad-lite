@@ -1,6 +1,7 @@
 'use strict';
 
 const ChatMessage = require('../static/js/ChatMessage');
+const CustomError = require('./utils/customError');
 const api = require('./db/API');
 const assert = require('assert').strict;
 const authorManager = require('./db/AuthorManager');
@@ -182,9 +183,76 @@ exports.socketio = (hookName, {io}) => {
   socketio = io;
 };
 
+const getPadSafe = async (padID) => {
+  if (typeof padID !== 'string') throw new CustomError('padID is not a string', 'apierror');
+  if (!padManager.isValidPadId(padID)) throw new CustomError('padID is not valid', 'apierror');
+  if (!await padManager.doesPadExist(padID)) throw new CustomError('pad not found', 'apierror');
+  return await padManager.getPad(padID);
+};
+
 api.registerChatHandlers({
-  getChatMessages,
-  sendChatMessageToPadClients,
+  /**
+   * appendChatMessage(padID, text, authorID, time), creates a chat message for the pad id,
+   * time is a timestamp
+   *
+   * Example returns:
+   *
+   * {code: 0, message:"ok", data: null}
+   * {code: 1, message:"padID does not exist", data: null}
+   */
+  appendChatMessage: async (padID, text, authorID, time) => {
+    if (typeof text !== 'string') throw new CustomError('text is not a string', 'apierror');
+    if (time === undefined || !Number.isInteger(Number.parseInt(time))) time = Date.now();
+    await sendChatMessageToPadClients(new ChatMessage(text, authorID, time), padID);
+  },
+
+  /**
+   * getChatHead(padID) returns the chatHead (last number of the last chat-message) of the pad
+   *
+   * Example returns:
+   *
+   * {code: 0, message:"ok", data: {chatHead: 42}}
+   * {code: 1, message:"padID does not exist", data: null}
+   */
+  getChatHead: async (padID) => {
+    const pad = await getPadSafe(padID);
+    return {chatHead: pad.chatHead};
+  },
+
+  /**
+   * getChatHistory(padID, start, end), returns a part of or the whole chat-history of this pad
+   *
+   * Example returns:
+   *
+   * {"code":0,"message":"ok","data":{"messages":[
+   *   {"text":"foo","authorID":"a.foo","time":1359199533759,"userName":"test"},
+   *   {"text":"bar","authorID":"a.foo","time":1359199534622,"userName":"test"}
+   * ]}}
+   *
+   * {code: 1, message:"start is higher or equal to the current chatHead", data: null}
+   *
+   * {code: 1, message:"padID does not exist", data: null}
+   */
+  getChatHistory: async (padID, start, end) => {
+    if (start && end) {
+      if (start < 0) throw new CustomError('start is below zero', 'apierror');
+      if (end < 0) throw new CustomError('end is below zero', 'apierror');
+      if (start > end) throw new CustomError('start is higher than end', 'apierror');
+    }
+    const pad = await getPadSafe(padID);
+    const chatHead = pad.chatHead;
+    if (!start || !end) {
+      start = 0;
+      end = pad.chatHead;
+    }
+    if (start > chatHead) {
+      throw new CustomError('start is higher than the current chatHead', 'apierror');
+    }
+    if (end > chatHead) {
+      throw new CustomError('end is higher than the current chatHead', 'apierror');
+    }
+    return {messages: await getChatMessages(pad, start, end)};
+  },
 });
 
 pad.registerLegacyChatMethodHandlers({
