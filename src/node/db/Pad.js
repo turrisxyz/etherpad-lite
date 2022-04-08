@@ -51,7 +51,6 @@ const Pad = function (id, database = db) {
   this.atext = Changeset.makeAText('\n');
   this.pool = new AttributePool();
   this.head = -1;
-  this.chatHead = -1;
   this.publicStatus = false;
   this.id = id;
   this.savedRevisions = [];

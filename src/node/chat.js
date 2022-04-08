@@ -157,6 +157,10 @@ exports.padCheck = async (hookName, {pad}) => {
   }
 };
 
+exports.padLoad = async (hookName, {pad}) => {
+  if (!('chatHead' in pad)) pad.chatHead = -1;
+};
+
 exports.socketio = (hookName, {io}) => {
   socketio = io;
 };
