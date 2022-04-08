@@ -563,11 +563,6 @@ Pad.prototype.remove = async function () {
   }));
   p.push(db.remove(`pad2readonly:${padID}`));
 
-  // delete all chat messages
-  p.push(promises.timesLimit(this.chatHead + 1, 500, async (i) => {
-    await this.db.remove(`pad:${this.id}:chat:${i}`, null);
-  }));
-
   // delete all revisions
   p.push(promises.timesLimit(this.head + 1, 500, async (i) => {
     await this.db.remove(`pad:${this.id}:revs:${i}`, null);

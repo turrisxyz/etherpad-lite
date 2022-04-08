@@ -8,6 +8,7 @@ const hooks = require('../static/js/pluginfw/hooks.js');
 const pad = require('./db/Pad');
 const padManager = require('./db/PadManager');
 const padMessageHandler = require('./handler/PadMessageHandler');
+const promises = require('./utils/promises');
 
 let socketio;
 
@@ -169,6 +170,12 @@ exports.padCopy = async (hookName, {srcPad, dstPad}) => {
 
 exports.padLoad = async (hookName, {pad}) => {
   if (!('chatHead' in pad)) pad.chatHead = -1;
+};
+
+exports.padRemove = async (hookName, {pad}) => {
+  await promises.timesLimit(pad.chatHead + 1, 500, async (i) => {
+    await pad.db.remove(`pad:${pad.id}:chat:${i}`, null);
+  });
 };
 
 exports.socketio = (hookName, {io}) => {
