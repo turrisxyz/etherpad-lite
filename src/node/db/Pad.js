@@ -711,21 +711,5 @@ Pad.prototype.check = async function () {
   assert.deepEqual(this.atext, atext);
   assert.deepEqual(this.getAllAuthors().sort(), [...authorIds].sort());
 
-  assert(Number.isInteger(this.chatHead));
-  assert(this.chatHead >= -1);
-  let c;
-  try {
-    for (c = 0; c <= this.chatHead; ++c) {
-      const msg = await chat.getChatMessage(this, c);
-      assert(msg != null);
-      assert(msg instanceof ChatMessage);
-    }
-  } catch (err) {
-    const pfx = `(pad ${this.id} chat message ${c}) `;
-    if (err.stack) err.stack = pfx + err.stack;
-    err.message = pfx + err.message;
-    throw err;
-  }
-
   await hooks.aCallAll('padCheck', {pad: this});
 };
