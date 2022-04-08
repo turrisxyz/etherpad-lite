@@ -25,6 +25,10 @@ const promises = require('../utils/promises');
 const attributeBlackList = ['db', 'id'];
 const jsonableList = ['pool'];
 
+let chat = null;
+
+exports.registerLegacyChatMethodHandlers = (handlers) => chat = handlers;
+
 /**
  * Copied from the Etherpad source code. It converts Windows line breaks to Unix
  * line breaks and convert Tabs to spaces
@@ -317,6 +321,7 @@ Pad.prototype.appendText = async function (newText, authorId = '') {
 /**
  * Adds a chat message to the pad, including saving it to the database.
  *
+ * @deprecated
  * @param {(ChatMessage|string)} msgOrText - Either a chat message object (recommended) or a string
  *     containing the raw text of the user's chat message (deprecated).
  * @param {?string} [authorId] - The user's author ID. Deprecated; use `msgOrText.authorId` instead.
@@ -324,31 +329,24 @@ Pad.prototype.appendText = async function (newText, authorId = '') {
  *     `msgOrText.time` instead.
  */
 Pad.prototype.appendChatMessage = async function (msgOrText, authorId = null, time = null) {
+  warnDeprecated('Pad.appendChatMessage() is deprecated');
   const msg =
       msgOrText instanceof ChatMessage ? msgOrText : new ChatMessage(msgOrText, authorId, time);
-  this.chatHead++;
-  await Promise.all([
-    // Don't save the display name in the database because the user can change it at any time. The
-    // `displayName` property will be populated with the current value when the message is read from
-    // the database.
-    this.db.set(`pad:${this.id}:chat:${this.chatHead}`, {...msg, displayName: undefined}),
-    this.saveToDatabase(),
-  ]);
+  await chat.appendChatMessage(this, msg);
 };
 
 /**
+ * @deprecated
  * @param {number} entryNum - ID of the desired chat message.
  * @returns {?ChatMessage}
  */
 Pad.prototype.getChatMessage = async function (entryNum) {
-  const entry = await this.db.get(`pad:${this.id}:chat:${entryNum}`);
-  if (entry == null) return null;
-  const message = ChatMessage.fromObject(entry);
-  message.displayName = await authorManager.getAuthorName(message.authorId);
-  return message;
+  warnDeprecated('Pad.getChatMessage() is deprecated');
+  return await chat.getChatMessage(this, entryNum);
 };
 
 /**
+ * @deprecated
  * @param {number} start - ID of the first desired chat message.
  * @param {number} end - ID of the last desired chat message.
  * @returns {ChatMessage[]} Any existing messages with IDs between `start` (inclusive) and `end`
@@ -356,19 +354,8 @@ Pad.prototype.getChatMessage = async function (entryNum) {
  *     interval as is typical in code.
  */
 Pad.prototype.getChatMessages = async function (start, end) {
-  const entries = await Promise.all(
-      [...Array(end + 1 - start).keys()].map((i) => this.getChatMessage(start + i)));
-
-  // sort out broken chat entries
-  // it looks like in happened in the past that the chat head was
-  // incremented, but the chat message wasn't added
-  return entries.filter((entry) => {
-    const pass = (entry != null);
-    if (!pass) {
-      console.warn(`WARNING: Found broken chat entry in pad ${this.id}`);
-    }
-    return pass;
-  });
+  warnDeprecated('Pad.getChatMessages() is deprecated');
+  return await chat.getChatMessages(this, start, end);
 };
 
 Pad.prototype.init = async function (text, authorId = '') {
@@ -729,7 +716,7 @@ Pad.prototype.check = async function () {
   let c;
   try {
     for (c = 0; c <= this.chatHead; ++c) {
-      const msg = await this.getChatMessage(c);
+      const msg = await chat.getChatMessage(this, c);
       assert(msg != null);
       assert(msg instanceof ChatMessage);
     }

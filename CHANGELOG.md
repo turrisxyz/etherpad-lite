@@ -84,6 +84,10 @@
     instead.
   * `padUpdate`: The `author` context property is deprecated; use the new
     `authorId` context property instead.
+* Pad object changes:
+  * The `Pad.appendChatMessage()` method is deprecated.
+  * The `Pad.getChatMessage()` method is deprecated.
+  * The `Pad.getChatMessages()` method is deprecated.
 * Returning `true` from a `handleMessageSecurity` hook function is deprecated;
   return `'permitOnce'` instead.
 * Changes to the `src/static/js/Changeset.js` library:
