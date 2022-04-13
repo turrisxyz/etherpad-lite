@@ -15,30 +15,37 @@
  * limitations under the License.
  */
 
-
-const db = require('../db/DB');
+const assert = require('assert').strict;
+const authorManager = require('../db/AuthorManager');
 const hooks = require('../../static/js/pluginfw/hooks');
+const padManager = require('../db/PadManager');
 
 exports.getPadRaw = async (padId, readOnlyId) => {
-  const keyPrefixRead = `pad:${padId}`;
-  const keyPrefixWrite = readOnlyId ? `pad:${readOnlyId}` : keyPrefixRead;
+  const pad = await padManager.getPad(padId);
+  const keyPrefix = `pad:${readOnlyId || padId}`;
 
-  const data = {
-    [keyPrefixWrite]: await db.get(keyPrefixRead), // The pad record itself.
-  };
-  for (const [k, v] of Object.values(data[keyPrefixWrite].pool.numToAttrib)) {
-    if (k !== 'author') continue;
-    const authorEntry = await db.get(`globalAuthor:${v}`);
+  const data = {};
+  const dbBackup = pad.db;
+  const tmpDb = pad.db = new Map();
+  try {
+    await pad.saveToDatabase();
+  } finally {
+    pad.db = dbBackup;
+  }
+  assert.equal(tmpDb.size, 1);
+  data[keyPrefix] = [...tmpDb.values()][0];
+  for (const authorId of pad.getAllAuthors()) {
+    const authorEntry = await authorManager.getAuthor(authorId);
     if (!authorEntry) continue;
-    data[`globalAuthor:${v}`] = authorEntry;
+    data[`globalAuthor:${authorId}`] = authorEntry;
     if (!authorEntry.padIDs) continue;
     authorEntry.padIDs = readOnlyId || padId;
   }
-  const keySuffixes = [];
-  for (let i = 0; i <= data[keyPrefixWrite].head; i++) keySuffixes.push(`:revs:${i}`);
-  for (let i = 0; i <= data[keyPrefixWrite].chatHead; i++) keySuffixes.push(`:chat:${i}`);
-  for (const keySuffix of keySuffixes) {
-    data[keyPrefixWrite + keySuffix] = await db.get(keyPrefixRead + keySuffix);
+  for (let i = 0; i <= pad.head; ++i) {
+    data[`${keyPrefix}:revs:${i}`] = await pad.getRevision(i);
+  }
+  for (let i = 0; i <= pad.chatHead; ++i) {
+    data[`${keyPrefix}:chat:${i}`] = await pad.getChatMessage(i);
   }
 
   // get content that has a different prefix IE comments:padId:foo
@@ -47,7 +54,7 @@ exports.getPadRaw = async (padId, readOnlyId) => {
   await Promise.all(prefixes.map(async (prefix) => {
     const key = `${prefix}:${padId}`;
     const writeKey = readOnlyId ? `${prefix}:${readOnlyId}` : key;
-    data[writeKey] = await db.get(key);
+    data[writeKey] = await pad.db.get(key);
   }));
 
   return data;
