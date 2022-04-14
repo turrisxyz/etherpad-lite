@@ -49,7 +49,15 @@ exports.getPadRaw = async (padId, readOnlyId) => {
   }
   const prefixes = await hooks.aCallAll('exportEtherpadAdditionalContent');
   await Promise.all(prefixes.map(async (prefix) => {
-    data[`${prefix}:${readOnlyId || padId}`] = await pad.db.get(`${prefix}:${padId}`);
+    const rkp = `${prefix}:${padId}`;
+    assert(!rkp.includes('*'));
+    const wkp = `${prefix}:${readOnlyId || padId}`;
+    data[wkp] = await pad.db.get(rkp);
+    for (const k of await pad.db.findKeys(`${rkp}:*`, null)) {
+      const pfx = `${rkp}:`;
+      assert(k.startsWith(pfx));
+      data[`${wkp}:${k.slice(pfx.length)}`] = await pad.db.get(k);
+    }
   }));
 
   return data;
