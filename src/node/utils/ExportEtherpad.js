@@ -52,9 +52,7 @@ exports.getPadRaw = async (padId, readOnlyId) => {
   // a plugin would return something likle ['comments', 'cakes']
   const prefixes = await hooks.aCallAll('exportEtherpadAdditionalContent');
   await Promise.all(prefixes.map(async (prefix) => {
-    const key = `${prefix}:${padId}`;
-    const writeKey = readOnlyId ? `${prefix}:${readOnlyId}` : key;
-    data[writeKey] = await pad.db.get(key);
+    data[`${prefix}:${readOnlyId || padId}`] = await pad.db.get(`${prefix}:${padId}`);
   }));
 
   return data;
