@@ -15,50 +15,44 @@
  * limitations under the License.
  */
 
+const Stream = require('./Stream');
 const assert = require('assert').strict;
 const authorManager = require('../db/AuthorManager');
 const hooks = require('../../static/js/pluginfw/hooks');
 const padManager = require('../db/PadManager');
 
 exports.getPadRaw = async (padId, readOnlyId) => {
-  const pad = await padManager.getPad(padId);
-  const keyPrefix = `pad:${readOnlyId || padId}`;
-
-  const data = {};
-  const dbBackup = pad.db;
-  const tmpDb = pad.db = new Map();
-  try {
-    await pad.saveToDatabase();
-  } finally {
-    pad.db = dbBackup;
-  }
-  assert.equal(tmpDb.size, 1);
-  data[keyPrefix] = [...tmpDb.values()][0];
-  for (const authorId of pad.getAllAuthors()) {
-    const authorEntry = await authorManager.getAuthor(authorId);
-    if (!authorEntry) continue;
-    data[`globalAuthor:${authorId}`] = authorEntry;
-    if (!authorEntry.padIDs) continue;
-    authorEntry.padIDs = readOnlyId || padId;
-  }
-  for (let i = 0; i <= pad.head; ++i) {
-    data[`${keyPrefix}:revs:${i}`] = await pad.getRevision(i);
-  }
-  for (let i = 0; i <= pad.chatHead; ++i) {
-    data[`${keyPrefix}:chat:${i}`] = await pad.getChatMessage(i);
-  }
-  const prefixes = await hooks.aCallAll('exportEtherpadAdditionalContent');
-  await Promise.all(prefixes.map(async (prefix) => {
-    const rkp = `${prefix}:${padId}`;
-    assert(!rkp.includes('*'));
-    const wkp = `${prefix}:${readOnlyId || padId}`;
-    data[wkp] = await pad.db.get(rkp);
-    for (const k of await pad.db.findKeys(`${rkp}:*`, null)) {
-      const pfx = `${rkp}:`;
-      assert(k.startsWith(pfx));
-      data[`${wkp}:${k.slice(pfx.length)}`] = await pad.db.get(k);
-    }
+  const dstPfx = `pad:${readOnlyId || padId}`;
+  const [pad, prefixes] = await Promise.all([
+    padManager.getPad(padId),
+    hooks.aCallAll('exportEtherpadAdditionalContent'),
+  ]);
+  const pluginRecords = await Promise.all(prefixes.map(async (prefix) => {
+    const srcPfx = `${prefix}:${padId}`;
+    const dstPfx = `${prefix}:${readOnlyId || padId}`;
+    const keys = await pad.db.findKeys(`${srcPfx}:*`, null);
+    return (function* () {
+      yield [dstPfx, pad.db.get(srcPfx)];
+      for (const k of keys) {
+        assert(k.startsWith(`${srcPfx}:`));
+        yield [`${dstPfx}${k.slice(srcPfx.length)}`, pad.db.get(k)];
+      }
+    })();
   }));
-
+  const records = (function* () {
+    for (const authorId of pad.getAllAuthors()) {
+      yield [`globalAuthor:${authorId}`, (async () => {
+        const authorEntry = await authorManager.getAuthor(authorId);
+        if (!authorEntry) return undefined;
+        if (authorEntry.padIDs) authorEntry.padIDs = readOnlyId || padId;
+        return authorEntry;
+      })()];
+    }
+    for (let i = 0; i <= pad.head; ++i) yield [`${dstPfx}:revs:${i}`, pad.getRevision(i)];
+    for (let i = 0; i <= pad.chatHead; ++i) yield [`${dstPfx}:chat:${i}`, pad.getChatMessage(i)];
+    for (const gen of pluginRecords) yield* gen;
+  })();
+  const data = {[dstPfx]: pad};
+  for (const [key, p] of new Stream(records).batch(100).buffer(99)) data[key] = await p;
   return data;
 };
