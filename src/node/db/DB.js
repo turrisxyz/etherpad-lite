@@ -48,37 +48,35 @@ exports.init = async () => await new Promise((resolve, reject) => {
       console.error(err.stack ? err.stack : err);
       process.exit(1);
     }
-
     if (db.metrics != null) {
       for (const [metric, value] of Object.entries(db.metrics)) {
         if (typeof value !== 'number') continue;
         stats.gauge(`ueberdb_${metric}`, () => db.metrics[metric]);
       }
     }
-
-    // everything ok, set up Promise-based methods
-    ['get', 'set', 'findKeys', 'getSub', 'setSub', 'remove'].forEach((fn) => {
-      exports[fn] = util.promisify(db[fn].bind(db));
-    });
-
-    // set up wrappers for get and getSub that can't return "undefined"
-    const get = exports.get;
-    exports.get = async (key) => {
-      const result = await get(key);
-      return (result === undefined) ? null : result;
-    };
-
-    const getSub = exports.getSub;
-    exports.getSub = async (key, sub) => {
-      const result = await getSub(key, sub);
-      return (result === undefined) ? null : result;
-    };
-
+    for (const [fn, f] of Object.entries(exports.promisifyUeberDb(db))) exports[fn] = f;
     // exposed for those callers that need the underlying raw API
     exports.db = db;
     resolve();
   });
 });
+
+exports.promisifyUeberDb = (udb) => {
+  const fns = ['get', 'set', 'findKeys', 'getSub', 'setSub', 'remove'];
+  const db = Object.fromEntries(fns.map((fn) => [fn, util.promisify(udb[fn].bind(udb))]));
+  // Make sure `get` and `getSub` always return `null` instead of `undefined`.
+  for (const fn of ['get', 'getSub']) {
+    const f = db[fn];
+    db[fn] = async (...args) => {
+      const result = await f(...args);
+      return result === undefined ? null : result;
+    };
+    // Mimic util.promisify().
+    Object.setPrototypeOf(db[fn], Object.getPrototypeOf(f));
+    Object.defineProperties(db[fn], Object.getOwnPropertyDescriptors(f));
+  }
+  return db;
+};
 
 exports.shutdown = async (hookName, context) => {
   await util.promisify(db.close.bind(db))();
