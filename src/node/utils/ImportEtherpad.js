@@ -24,6 +24,7 @@ const db = require('../db/DB');
 const hooks = require('../../static/js/pluginfw/hooks');
 const log4js = require('log4js');
 const supportedElems = require('../../static/js/contentcollector').supportedElems;
+const ueberdb = require('ueberdb2');
 
 const logger = log4js.getLogger('ImportEtherpad');
 
@@ -55,7 +56,8 @@ exports.setPadRaw = async (padId, r, authorId = '') => {
   // First validate and transform values. Do not commit any records to the database yet in case
   // there is a problem with the data.
 
-  const dbRecords = new Map();
+  const data = new Map();
+  const padDb = db.promisifyUeberDb(new ueberdb.Database('memory', {data}));
   const existingAuthors = new Set();
   await Promise.all(Object.entries(records).map(([key, value]) => q.pushAsync(async () => {
     if (!value) {
@@ -95,26 +97,15 @@ exports.setPadRaw = async (padId, r, authorId = '') => {
       logger.warn(`(pad ${padId}) Ignoring record with unsupported key: ${key}`);
       return;
     }
-    dbRecords.set(key, value);
+    await padDb.set(key, value);
   })));
 
-  const pad = new Pad(padId, {
-    // Only fetchers are needed to check the pad's integrity.
-    get: async (k) => dbRecords.get(k),
-    getSub: async (k, sub) => {
-      let v = dbRecords.get(k);
-      for (const sk of sub) {
-        if (v == null) return null;
-        v = v[sk];
-      }
-      return v;
-    },
-  });
+  const pad = new Pad(padId, padDb);
   await pad.init(null, authorId);
   await pad.check();
 
   await Promise.all([
-    ...[...dbRecords].map(([k, v]) => q.pushAsync(() => db.set(k, v))),
+    ...[...data].map(([k, v]) => q.pushAsync(() => db.set(k, v))),
     ...[...existingAuthors].map((a) => q.pushAsync(() => authorManager.addPad(a, padId))),
   ]);
 };
