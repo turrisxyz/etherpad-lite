@@ -54,5 +54,10 @@ exports.getPadRaw = async (padId, readOnlyId) => {
   })();
   const data = {[dstPfx]: pad};
   for (const [key, p] of new Stream(records).batch(100).buffer(99)) data[key] = await p;
+  await hooks.aCallAll('exportEtherpad', {
+    pad,
+    data,
+    dstPadId: readOnlyId || padId,
+  });
   return data;
 };
